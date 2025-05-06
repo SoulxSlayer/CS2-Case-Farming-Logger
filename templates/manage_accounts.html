@@ -4,12 +4,13 @@
 {% block content %}
 <h1 class="mb-4">Manage Your CS2 Accounts</h1>
 
-{# --- Add Account Form (Stays the same) --- #}
+{# --- Add Account Form --- #}
 <div class="card mb-4 bg-dark text-light border-secondary">
     <div class="card-header">Add New Account</div>
     <div class="card-body">
         <form action="{{ url_for('add_tracked_account') }}" method="POST">
-            <div class="row g-3 align-items-end">
+            <!-- 1. REMOVED align-items-end from the row class -->
+            <div class="row g-3">
                 <div class="col-md-5">
                     <label for="account_name" class="form-label">Account Name (Nickname)</label>
                     <input type="text" class="form-control form-control-sm bg-dark text-light border-secondary" id="account_name" name="account_name" required>
@@ -19,8 +20,9 @@
                     <input type="text" class="form-control form-control-sm bg-dark text-light border-secondary" id="steamid" name="steamid" pattern="[0-9]{17}" title="Enter a 17-digit SteamID64" required>
                      <small class="form-text text-muted">This is the long number in your profile URL, e.g., 7656119...</small>
                 </div>
-                <div class="col-md-2 text-end">
-                     <label class="form-label"> </label>
+                <!-- 2. REMOVED placeholder label -->
+                <!-- 3. ADDED d-flex align-items-end TO THE COLUMN -->
+                <div class="col-md-2 text-end d-flex align-items-end pb-1"> <!-- Added pb-1 for minor spacing adjustment if needed -->
                      <button type="submit" class="btn btn-primary btn-sm w-100">Add Account</button>
                 </div>
             </div>
