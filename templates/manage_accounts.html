@@ -4,24 +4,23 @@
 {% block content %}
 <h1 class="mb-4">Manage Your CS2 Accounts</h1>
 
-{# --- Add Account Form (Sort Number Removed) --- #}
+{# --- Add Account Form (Stays the same) --- #}
 <div class="card mb-4 bg-dark text-light border-secondary">
     <div class="card-header">Add New Account</div>
     <div class="card-body">
         <form action="{{ url_for('add_tracked_account') }}" method="POST">
             <div class="row g-3 align-items-end">
-                <div class="col-md-5"> {# Adjusted width #}
+                <div class="col-md-5">
                     <label for="account_name" class="form-label">Account Name (Nickname)</label>
                     <input type="text" class="form-control form-control-sm bg-dark text-light border-secondary" id="account_name" name="account_name" required>
                 </div>
-                <div class="col-md-5"> {# Adjusted width #}
+                <div class="col-md-5">
                     <label for="steamid" class="form-label">SteamID64</label>
                     <input type="text" class="form-control form-control-sm bg-dark text-light border-secondary" id="steamid" name="steamid" pattern="[0-9]{17}" title="Enter a 17-digit SteamID64" required>
                      <small class="form-text text-muted">This is the long number in your profile URL, e.g., 7656119...</small>
                 </div>
-                {# Sort number input removed #}
-                <div class="col-md-2 text-end"> {# Adjusted width and alignment #}
-                     <label class="form-label"> </label> {# Placeholder for alignment #}
+                <div class="col-md-2 text-end">
+                     <label class="form-label"> </label>
                      <button type="submit" class="btn btn-primary btn-sm w-100">Add Account</button>
                 </div>
             </div>
@@ -29,33 +28,42 @@
     </div>
 </div>
 
-{# --- Tracked Accounts Table (Modified for Drag & Drop) --- #}
+{# --- Tracked Accounts Table (Add Edit Button) --- #}
 <div class="card bg-dark text-light border-secondary">
      <div class="card-header d-flex justify-content-between align-items-center">
          <span>Your Tracked Accounts (Drag rows to reorder)</span>
-         <button id="saveOrderBtn" class="btn btn-success btn-sm" disabled>Save Order</button> {# Save button #}
+         <button id="saveOrderBtn" class="btn btn-success btn-sm" disabled>Save Order</button>
      </div>
      <div class="card-body">
-         <div id="saveOrderStatus" class="mb-2"></div> {# Feedback area #}
+         <div id="saveOrderStatus" class="mb-2"></div>
          {% if user_accounts %}
          <div class="table-responsive">
              <table class="table table-dark table-striped table-hover table-sm">
                  <thead>
                      <tr>
-                         <th style="width: 5%;"><i class="bi bi-grip-vertical"></i></th> {# Handle indicator #}
+                         <th style="width: 5%;"><i class="bi bi-grip-vertical"></i></th>
                          <th>Account Name</th>
                          <th>SteamID64</th>
-                         <th>Actions</th>
+                         <th>Actions</th> {# Combined Actions Column #}
                      </tr>
                  </thead>
-                 <tbody id="accountsTableBody"> {# <-- Added ID #}
+                 <tbody id="accountsTableBody">
                      {% for acc in user_accounts %}
-                     {# Added data-account-id attribute to TR #}
                      <tr data-account-id="{{ acc._id }}" style="cursor: grab;">
-                         <td><i class="bi bi-grip-vertical"></i></td> {# Handle indicator #}
+                         <td><i class="bi bi-grip-vertical"></i></td>
                          <td>{{ acc.account_name }}</td>
                          <td><a href="https://steamcommunity.com/profiles/{{ acc.steamid }}/inventory/" target="_blank">{{ acc.steamid }}</a></td>
                          <td>
+                             {# --- EDIT BUTTON --- #}
+                             <button class="btn btn-outline-info btn-sm me-1 edit-account-btn"
+                                     data-bs-toggle="modal"
+                                     data-bs-target="#editAccountModal"
+                                     data-account-id="{{ acc._id }}"
+                                     data-account-name="{{ acc.account_name }}"
+                                     data-steamid="{{ acc.steamid }}">
+                                 <i class="bi bi-pencil-square"></i> Edit
+                             </button>
+                             {# --- DELETE FORM --- #}
                              <form action="{{ url_for('delete_tracked_account', account_id=acc._id) }}" method="POST" style="display: inline;" onsubmit="return confirm('Are you sure you want to delete this account? Progress data associated with it will NOT be deleted.');">
                                  <button type="submit" class="btn btn-outline-danger btn-sm">
                                      <i class="bi bi-trash"></i> Delete
@@ -72,82 +80,118 @@
          {% endif %}
      </div>
 </div>
+
+{# --- EDIT ACCOUNT MODAL --- #}
+<div class="modal fade" id="editAccountModal" tabindex="-1" aria-labelledby="editAccountModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content bg-dark text-light border-secondary">
+            <form id="editAccountForm" method="POST"> {# Action set dynamically by JS #}
+                <div class="modal-header border-secondary">
+                    <h5 class="modal-title" id="editAccountModalLabel">Edit Account</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="edit_account_name" class="form-label">Account Name (Nickname)</label>
+                        <input type="text" class="form-control bg-dark text-light border-secondary" id="edit_account_name" name="account_name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit_steamid" class="form-label">SteamID64</label>
+                        <input type="text" class="form-control bg-dark text-light border-secondary" id="edit_steamid" name="steamid" pattern="[0-9]{17}" title="Enter a 17-digit SteamID64" required>
+                        <small class="form-text text-muted">Ensure this is the correct 17-digit ID.</small>
+                    </div>
+                    {# Hidden input for ID is not strictly needed if it's in the action URL #}
+                </div>
+                <div class="modal-footer border-secondary">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
-{# --- JavaScript Block (Add to end of manage_accounts.html or base.html) --- #}
+{# --- JavaScript Block (Add Edit Modal Logic) --- #}
 {% block scripts %}
 {{ super() }} {# Include scripts from base.html if extending #}
 <script>
     document.addEventListener('DOMContentLoaded', function () {
+        // --- SortableJS Logic (Keep As Is) ---
         const tableBody = document.getElementById('accountsTableBody');
         const saveButton = document.getElementById('saveOrderBtn');
         const statusDiv = document.getElementById('saveOrderStatus');
         let sortableInstance = null;
-        let initialOrder = []; // To track if order actually changed
+        let initialOrder = [];
 
         if (tableBody && saveButton) {
-            // Function to get current order of account IDs
-            const getCurrentOrder = () => {
-                return Array.from(tableBody.querySelectorAll('tr')).map(row => row.dataset.accountId);
-            };
-
-             // Store the initial order on load
+            const getCurrentOrder = () => Array.from(tableBody.querySelectorAll('tr')).map(row => row.dataset.accountId);
             initialOrder = getCurrentOrder();
+            sortableInstance = new Sortable(tableBody, { /* ... sortable options ... */
+                 animation: 150,
+                 handle: 'td:first-child',
+                 ghostClass: 'bg-secondary',
+                 onUpdate: function (evt) {
+                     const newOrder = getCurrentOrder();
+                     saveButton.disabled = (JSON.stringify(newOrder) === JSON.stringify(initialOrder));
+                     statusDiv.innerHTML = '';
+                 }
+             });
 
-            sortableInstance = new Sortable(tableBody, {
-                animation: 150, // ms, animation speed moving items when sorting, `0` — without animation
-                handle: 'td:first-child', // Use the first cell (with the grip icon) as the handle
-                ghostClass: 'bg-secondary', // Class name for the drop placeholder
-                onUpdate: function (/**Event*/evt) {
-                    // Enable the save button only if the order has changed
-                    const newOrder = getCurrentOrder();
-                    saveButton.disabled = (JSON.stringify(newOrder) === JSON.stringify(initialOrder));
-                    statusDiv.innerHTML = ''; // Clear status on change
-                }
-            });
-
-            saveButton.addEventListener('click', function () {
-                const orderedIds = getCurrentOrder();
-
-                statusDiv.innerHTML = '<span class="text-info">Saving...</span>';
-                saveButton.disabled = true; // Disable while saving
-
-                fetch("{{ url_for('update_account_order') }}", {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        // Add CSRF token header if you implement CSRF protection later
-                    },
-                    body: JSON.stringify({ ordered_ids: orderedIds })
-                })
-                .then(response => {
-                    if (!response.ok) {
-                         // Try to get error message from JSON response body
-                         return response.json().then(err => {
-                             throw new Error(err.error || `HTTP error! Status: ${response.status}`);
-                         });
-                     }
-                     return response.json();
-                })
-                .then(data => {
-                    if (data.success) {
-                        statusDiv.innerHTML = '<span class="text-success">Order saved successfully!</span>';
-                        initialOrder = orderedIds; // Update initial order to the new saved state
-                        saveButton.disabled = true; // Stay disabled until next change
-                        // Optionally fade out the success message after a few seconds
-                        setTimeout(() => { statusDiv.innerHTML = ''; }, 3000);
-                    } else {
+            saveButton.addEventListener('click', function () { /* ... save order fetch logic ... */
+                 const orderedIds = getCurrentOrder();
+                 statusDiv.innerHTML = '<span class="text-info">Saving...</span>';
+                 saveButton.disabled = true;
+                 fetch("{{ url_for('update_account_order') }}", {
+                     method: 'POST',
+                     headers: { 'Content-Type': 'application/json', },
+                     body: JSON.stringify({ ordered_ids: orderedIds })
+                 })
+                 .then(response => response.ok ? response.json() : response.json().then(err => { throw new Error(err.error || `HTTP error! Status: ${response.status}`) }))
+                 .then(data => {
+                     if (data.success) {
+                         statusDiv.innerHTML = '<span class="text-success">Order saved successfully!</span>';
+                         initialOrder = orderedIds;
+                         saveButton.disabled = true;
+                         setTimeout(() => { statusDiv.innerHTML = ''; }, 3000);
+                     } else {
                          statusDiv.innerHTML = `<span class="text-danger">Error: ${data.error || 'Unknown error'}</span>`;
-                         saveButton.disabled = false; // Re-enable if save failed but order might still be different
-                    }
-                })
-                .catch(error => {
-                    console.error('Error saving order:', error);
-                    statusDiv.innerHTML = `<span class="text-danger">Error saving order: ${error.message}</span>`;
-                    saveButton.disabled = false; // Re-enable on fetch error
-                });
+                         saveButton.disabled = false;
+                     }
+                 })
+                 .catch(error => {
+                     console.error('Error saving order:', error);
+                     statusDiv.innerHTML = `<span class="text-danger">Error saving order: ${error.message}</span>`;
+                     saveButton.disabled = false;
+                 });
             });
         }
+
+        // --- EDIT ACCOUNT MODAL LOGIC ---
+        const editAccountModal = document.getElementById('editAccountModal');
+        if (editAccountModal) {
+            const editAccountForm = document.getElementById('editAccountForm');
+            const editAccountNameInput = document.getElementById('edit_account_name');
+            const editSteamidInput = document.getElementById('edit_steamid');
+            const editAccountModalLabel = document.getElementById('editAccountModalLabel');
+
+            editAccountModal.addEventListener('show.bs.modal', function (event) {
+                // Button that triggered the modal
+                const button = event.relatedTarget;
+
+                // Extract info from data-* attributes
+                const accountId = button.getAttribute('data-account-id');
+                const accountName = button.getAttribute('data-account-name');
+                const steamid = button.getAttribute('data-steamid');
+
+                // Update the modal's content
+                editAccountForm.action = `/edit_tracked_account/${accountId}`; // Set the form action URL
+                editAccountModalLabel.textContent = `Edit Account: ${accountName}`; // Update title
+                editAccountNameInput.value = accountName;
+                editSteamidInput.value = steamid;
+            });
+        }
+
     });
 </script>
 {% endblock %}

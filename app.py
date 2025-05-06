@@ -609,6 +609,82 @@ def get_week_data():
         # Avoid sending detailed internal errors to the client
         return jsonify({"error": "An internal error occurred while fetching data."}), 500
 
+@app.route('/edit_tracked_account/<account_id>', methods=['POST'])
+@login_required
+def edit_tracked_account(account_id):
+    """Handles editing an existing tracked account's name and SteamID."""
+    user_id = current_user.get_id_obj()
+
+    # --- Get Data from Form ---
+    new_account_name = request.form.get('account_name')
+    new_steamid = request.form.get('steamid')
+
+    # --- Basic Validation ---
+    if not new_account_name or not new_steamid:
+        flash("Account Name and SteamID64 are required.", "warning")
+        return redirect(url_for('manage_accounts'))
+
+    if not new_steamid.isdigit() or len(new_steamid) != 17:
+         flash("Invalid SteamID64 format. Must be 17 digits.", "warning")
+         return redirect(url_for('manage_accounts'))
+
+    try:
+        account_obj_id = ObjectId(account_id)
+    except Exception:
+        flash("Invalid Account ID format.", "danger")
+        return redirect(url_for('manage_accounts'))
+
+    try:
+        # --- Security & Validation ---
+        # 1. Find the account AND verify ownership
+        original_account = accounts_collection.find_one({
+            "_id": account_obj_id,
+            "user_id": user_id
+        })
+
+        if not original_account:
+            # Either ID is wrong OR it doesn't belong to this user
+            flash("Account not found or you don't have permission to edit it.", "danger")
+            return redirect(url_for('manage_accounts'))
+
+        # 2. Check if the new SteamID is already used by ANOTHER account of THIS user
+        if new_steamid != original_account.get('steamid'): # Only check if steamid actually changed
+            existing_steamid = accounts_collection.find_one({
+                "steamid": new_steamid,
+                "user_id": user_id,
+                "_id": {"$ne": account_obj_id} # Exclude the current document being edited
+            })
+            if existing_steamid:
+                flash(f"Another account ('{existing_steamid.get('account_name')}') already uses SteamID {new_steamid}.", "warning")
+                return redirect(url_for('manage_accounts'))
+
+        # --- Prepare Update ---
+        update_data = {
+            "account_name": new_account_name,
+            "steamid": new_steamid
+            # Add 'last_updated': datetime.now(timezone.utc) if desired
+        }
+
+        # --- Perform Update ---
+        result = accounts_collection.update_one(
+            {"_id": account_obj_id, "user_id": user_id}, # Filter remains crucial
+            {"$set": update_data}
+        )
+
+        if result.matched_count == 0:
+             # This case should theoretically be caught by the initial find_one check
+             flash("Account not found or you don't have permission to edit it.", "danger")
+        elif result.modified_count > 0:
+            flash(f"Account '{new_account_name}' updated successfully.", "success")
+        else:
+            flash("No changes detected for the account.", "info")
+
+    except Exception as e:
+        print(f"Error editing account {account_id} for user {user_id}: {e}")
+        flash(f"Failed to edit account: {e}", "danger")
+
+    return redirect(url_for('manage_accounts'))
+
 # --- Main Execution ---
 if __name__ == '__main__':
     app.run(debug=True, port=5001)
