@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CS2 Case Farming Tracker</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    
+    <link rel="icon" type="image/x-icon" href="/static/icon/icon.png"> 
+
+</head>
+<body class="dark-theme">
+    <div class="container mt-4">
+        <h1 class="mb-4 text-center">CS2 Case Farming Progress</h1>
+
+        <div class="card mb-4 bg-dark text-light border-secondary">
+            <div class="card-header">Add New Weekly Progress</div>
+            <div class="card-body">
+                <form action="{{ url_for('add_progress') }}" method="POST">
+                    <div class="row g-3 align-items-end">
+                        <div class="col-md-3">
+                            <label for="account_id" class="form-label">Account</label>
+                            <select class="form-select form-select-sm bg-dark text-light border-secondary" id="account_id" name="account_id" required>
+                                <option value="" selected disabled>Select Account...</option>
+                                {% for account in accounts %}
+                                <option value="{{ account._id }}">{{ account.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label for="week_start" class="form-label">Week Start (Wed)</label>
+                            <input type="date" class="form-control form-control-sm bg-dark text-light border-secondary" id="week_start" name="week_start" value="{{ current_week_start_str }}" required>
+                        </div>
+                         <div class="col-md-2 d-flex align-items-center pt-3">
+                             <div class="form-check form-switch">
+                                 <input class="form-check-input" type="checkbox" role="switch" id="drop_farmed" name="drop_farmed" checked>
+                                 <label class="form-check-label" for="drop_farmed">Drop Farmed?</label>
+                             </div>
+                         </div>
+                        <div class="col-md-3">
+                            <label for="case_name" class="form-label">Case Name</label>
+                            <select class="form-select form-select-sm bg-dark text-light border-secondary" id="case_name" name="case_name">
+                                <option value="" selected>Select Case (if farmed)...</option>
+                                {% for case in cases %}
+                                <option value="{{ case.name }}">{{ case.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="additional_drop" class="form-label">Additional Drop</label>
+                            <input type="text" class="form-control form-control-sm bg-dark text-light border-secondary" id="additional_drop" name="additional_drop" placeholder="e.g., Graffiti">
+                        </div>
+                         <div class="col-12 text-end">
+                             <button type="submit" class="btn btn-primary btn-sm">Save Progress</button>
+                         </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="accordion" id="progressAccordion">
+
+            <div class="accordion-item bg-dark text-light border-secondary">
+                <h2 class="accordion-header" id="headingThisWeek">
+                    <button class="accordion-button bg-dark text-light" type="button" data-bs-toggle="collapse" data-bs-target="#collapseThisWeek" aria-expanded="true" aria-controls="collapseThisWeek">
+                        This Week (Started: {{ current_week_start_str }})
+                    </button>
+                </h2>
+                <div id="collapseThisWeek" class="accordion-collapse collapse show" aria-labelledby="headingThisWeek" data-bs-parent="#progressAccordion">
+                    <div class="accordion-body">
+                        <div class="table-responsive">
+                            <table class="table table-dark table-striped table-hover table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>Account</th>
+                                        <th>Farmed?</th>
+                                        <th>Case Dropped</th>
+                                        <th>Additional Drop</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for entry in current_week_data %}
+                                    <tr>
+                                        <td><a href="https://steamcommunity.com/profiles/{{ entry.steamid }}/inventory/" target="_blank">{{ entry.account_name }}</a></td>
+                                        <td>{{ 'Yes' if entry.drop_farmed else 'No' }}</td>
+                                        <td>{{ entry.case_name if entry.case_name else 'N/A' }}</td>
+                                        <td>{{ entry.additional_drop if entry.additional_drop else '-' }}</td>
+                                        <td>
+                                            <button class="btn btn-outline-info btn-sm edit-btn"
+                                                    data-bs-toggle="modal"
+                                                    data-bs-target="#editProgressModal"
+                                                    data-progress-id="{{ entry._id }}"
+                                                    data-account-name="{{ entry.account_name }}"
+                                                    data-week-start="{{ entry.week_start.strftime('%Y-%m-%d') }}"
+                                                    data-drop-farmed="{{ 'true' if entry.drop_farmed else 'false' }}"
+                                                    data-case-name="{{ entry.case_name | default('', true) }}"
+                                                    data-additional-drop="{{ entry.additional_drop | default('', true) }}">
+                                                <i class="bi bi-pencil-square"></i> Edit
+                                            </button>
+                                        </td>
+                                    </tr>
+                                    {% else %}
+                                    <tr>
+                                        <td colspan="5" class="text-center">No progress recorded for this week yet.</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="accordion-item bg-dark text-light border-secondary">
+                <h2 class="accordion-header" id="headingLastWeek">
+                    <button class="accordion-button collapsed bg-dark text-light" type="button" data-bs-toggle="collapse" data-bs-target="#collapseLastWeek" aria-expanded="false" aria-controls="collapseLastWeek">
+                        Last Week (Started: {{ last_week_start_str }})
+                    </button>
+                </h2>
+                <div id="collapseLastWeek" class="accordion-collapse collapse" aria-labelledby="headingLastWeek" data-bs-parent="#progressAccordion">
+                    <div class="accordion-body">
+                         <div class="table-responsive">
+                             <table class="table table-dark table-striped table-hover table-sm">
+                                 <thead>
+                                     <tr>
+                                         <th>Account</th>
+                                         <th>Farmed?</th>
+                                         <th>Case Dropped</th>
+                                         <th>Additional Drop</th>
+                                         </tr>
+                                 </thead>
+                                 <tbody>
+                                     {% for entry in last_week_data %}
+                                     <tr>
+                                         <td><a href="https://steamcommunity.com/profiles/{{ entry.steamid }}/inventory/" target="_blank">{{ entry.account_name }}</a></td>
+                                         <td>{{ 'Yes' if entry.drop_farmed else 'No' }}</td>
+                                         <td>{{ entry.case_name if entry.case_name else 'N/A' }}</td>
+                                         <td>{{ entry.additional_drop if entry.additional_drop else '-' }}</td>
+                                     </tr>
+                                     {% else %}
+                                     <tr>
+                                         <td colspan="4" class="text-center">No progress recorded for last week.</td>
+                                     </tr>
+                                     {% endfor %}
+                                 </tbody>
+                             </table>
+                         </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="accordion-item bg-dark text-light border-secondary">
+                 <h2 class="accordion-header" id="headingOtherWeeks">
+                     <button class="accordion-button collapsed bg-dark text-light" type="button" data-bs-toggle="collapse" data-bs-target="#collapseOtherWeeks" aria-expanded="false" aria-controls="collapseOtherWeeks">
+                         Other Weeks
+                     </button>
+                 </h2>
+                 <div id="collapseOtherWeeks" class="accordion-collapse collapse" aria-labelledby="headingOtherWeeks" data-bs-parent="#progressAccordion">
+                     <div class="accordion-body">
+                         <div class="row mb-3">
+                             <div class="col-md-4">
+                                 <label for="other_week_date" class="form-label">Select Week Start (Wednesday):</label>
+                                 <input type="date" class="form-control form-control-sm bg-dark text-light border-secondary" id="other_week_date">
+                             </div>
+                             <div class="col-md-2 d-flex align-items-end">
+                                 <button id="fetch-other-week" class="btn btn-secondary btn-sm">Fetch Data</button>
+                             </div>
+                         </div>
+                          <div id="other-week-error" class="alert alert-danger d-none" role="alert"></div>
+                         <div class="table-responsive">
+                             <table class="table table-dark table-striped table-hover table-sm">
+                                 <thead>
+                                     <tr>
+                                         <th>Account</th>
+                                         <th>Farmed?</th>
+                                         <th>Case Dropped</th>
+                                         <th>Additional Drop</th>
+                                     </tr>
+                                 </thead>
+                                 <tbody id="other-week-tbody">
+                                     <tr>
+                                         <td colspan="4" class="text-center">Select a week and click 'Fetch Data'.</td>
+                                     </tr>
+                                     </tbody>
+                             </table>
+                         </div>
+                     </div>
+                 </div>
+             </div>
+
+        </div> </div> <div class="modal fade" id="editProgressModal" tabindex="-1" aria-labelledby="editProgressModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content bg-dark text-light border-secondary">
+                <form id="editProgressForm" method="POST"> <div class="modal-header border-secondary">
+                        <h5 class="modal-title" id="editProgressModalLabel">Edit Progress for <span id="editAccountName"></span> - Week <span id="editWeekStart"></span></h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                         <div class="mb-3 form-check form-switch">
+                            <input class="form-check-input" type="checkbox" role="switch" id="edit_drop_farmed" name="edit_drop_farmed">
+                            <label class="form-check-label" for="edit_drop_farmed">Drop Farmed?</label>
+                        </div>
+                        <div class="mb-3">
+                            <label for="edit_case_name" class="form-label">Case Name</label>
+                            <select class="form-select bg-dark text-light border-secondary" id="edit_case_name" name="edit_case_name">
+                                <option value="">Select Case (if farmed)...</option>
+                                {% for case in cases %}
+                                <option value="{{ case.name }}">{{ case.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="edit_additional_drop" class="form-label">Additional Drop</label>
+                            <input type="text" class="form-control bg-dark text-light border-secondary" id="edit_additional_drop" name="edit_additional_drop">
+                        </div>
+                         <input type="hidden" name="progress_id" id="edit_progress_id"> </div>
+                    <div class="modal-footer border-secondary">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                        <button type="submit" class="btn btn-primary">Save Changes</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <script src="{{ url_for('static', filename='js/script.js') }}"></script>
+</body>
+</html>

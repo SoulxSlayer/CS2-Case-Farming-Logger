@@ -1,0 +1,123 @@
+/* Basic Dark Theme */
+body.dark-theme {
+    background-color: #212529; /* Bootstrap dark background */
+    color: #dee2e6; /* Bootstrap light gray text */
+}
+
+/* Style tables in dark theme */
+.table-dark {
+    border-color: #495057; /* Darker border */
+}
+
+/* Style accordion buttons */
+.accordion-button.dark-theme {
+    background-color: #343a40; /* Slightly lighter dark */
+    color: #f8f9fa; /* White text */
+    border: none;
+    box-shadow: none;
+}
+.accordion-button.dark-theme:not(.collapsed) {
+    background-color: #0d6efd; /* Bootstrap primary blue when open */
+    color: white;
+}
+.accordion-button.dark-theme:focus {
+    box-shadow: none;
+    border-color: rgba(0, 0, 0, .125);
+}
+
+/* Style accordion body */
+.accordion-body.dark-theme {
+    background-color: #2b3035; /* Slightly different dark shade */
+}
+
+/* Ensure form elements inherit dark theme */
+.form-control.bg-dark,
+.form-select.bg-dark {
+    background-color: #343a40 !important; /* Override Bootstrap */
+    color: #dee2e6 !important;
+    border-color: #495057 !important;
+}
+.form-control.bg-dark:focus,
+.form-select.bg-dark:focus {
+    background-color: #343a40 !important;
+    color: #dee2e6 !important;
+    border-color: #86b7fe !important; /* Bootstrap focus blue */
+    box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+}
+
+/* Modal dark theme adjustments */
+.modal-content.bg-dark {
+     background-color: #212529 !important;
+     color: #dee2e6 !important;
+     border-color: #495057 !important;
+}
+.modal-header.border-secondary,
+.modal-footer.border-secondary {
+    border-color: #495057 !important;
+}
+.btn-close-white {
+    filter: invert(1) grayscale(100%) brightness(200%); /* Make default close button visible */
+}
+
+/* Ensure links are visible */
+a {
+    color: #6ea8fe; /* Lighter blue for links */
+}
+a:hover {
+    color: #8ec0ff;
+}
+
+/* Adjustments for smaller elements */
+.form-control-sm, .form-select-sm, .btn-sm {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.875rem;
+    border-radius: 0.2rem;
+}
+
+.table-sm td, .table-sm th {
+     padding: 0.4rem; /* Slightly more padding for readability */
+}
+
+/* Make sure dropdown options are readable */
+select.bg-dark option {
+    background-color: #343a40;
+    color: #dee2e6;
+}
+
+/* Style date input picker icon */
+input[type="date"]::-webkit-calendar-picker-indicator {
+    filter: invert(0.8); /* Make it lighter on dark background */
+    cursor: pointer;
+}
+
+/* Hide default error message area initially */
+#other-week-error.d-none {
+    display: none !important;
+}
+
+/* style.css additions */
+
+/* Style flash messages (adjust colors as needed) */
+.alert-success {
+    background-color: #198754; /* Bootstrap success green */
+    color: white;
+    border-color: #198754;
+}
+.alert-danger {
+    background-color: #dc3545; /* Bootstrap danger red */
+    color: white;
+    border-color: #dc3545;
+}
+.alert-warning {
+    background-color: #ffc107; /* Bootstrap warning yellow */
+    color: #000; /* Dark text for yellow bg */
+    border-color: #ffc107;
+}
+.alert-info {
+    background-color: #0dcaf0; /* Bootstrap info cyan */
+    color: #000; /* Dark text for cyan bg */
+    border-color: #0dcaf0;
+}
+.alert .btn-close { /* Make close button visible on custom bg */
+    filter: invert(1) grayscale(100%) brightness(200%);
+}
