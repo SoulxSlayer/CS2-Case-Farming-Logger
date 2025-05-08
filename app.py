@@ -539,28 +539,23 @@ def update_progress(progress_id):
 @login_required
 def get_week_data():
     """Fetches progress data for a specific week FOR THE CURRENT USER via AJAX."""
-    week_start_str = request.args.get('date') # Get date string first
-
-    # --- Basic Validation ---
+    week_start_str = request.args.get('date')
     if not week_start_str:
         return jsonify({"error": "Date parameter is required"}), 400
 
     try:
-        # --- Define user_id and parse date EARLY ---
-        user_id = current_user.get_id_obj() # <<< DEFINE user_id HERE
+        user_id = current_user.get_id_obj()
         week_start_dt = datetime.strptime(week_start_str, '%Y-%m-%d')
         week_start_utc = datetime.combine(week_start_dt.date(), datetime.min.time(), tzinfo=timezone.utc)
 
-        # --- Fetch user's accounts first - SORTED ---
         user_accounts = list(accounts_collection.find(
-            {"user_id": user_id}, # Now user_id is defined
+            {"user_id": user_id},
             {"_id": 1, "account_name": 1, "steamid": 1, "sort_number": 1}
         ).sort("sort_number", ASCENDING))
 
         account_doc_id_map = {acc['_id']: acc for acc in user_accounts}
         account_ids_tracked = list(account_doc_id_map.keys())
 
-        # --- Fetch progress for the selected week and user ---
         progress_cursor = progress_collection.find({
             "user_id": user_id,
             "week_start": week_start_utc,
@@ -568,47 +563,41 @@ def get_week_data():
         })
 
         progress_map = {entry['account_doc_id']: entry for entry in progress_cursor}
-
-        # --- Combine data, respecting sort order ---
         detailed_progress = []
-        for acc in user_accounts: # Iterate through sorted accounts
+
+        for acc in user_accounts:
             acc_id = acc['_id']
-            entry = progress_map.get(acc_id)
-            if entry:
-                 detailed_entry = {
-                     "account_name": acc["account_name"],
-                     "steamid": acc["steamid"],
-                     "week_start": entry["week_start"].strftime('%Y-%m-%d'),
-                     "drop_farmed": entry["drop_farmed"],
-                     "case_name": entry.get("case_name", ""),
-                     "additional_drop": entry.get("additional_drop", "")
-                 }
-            else: # Account exists but no progress for this week
-                 detailed_entry = {
-                       "account_name": acc["account_name"],
-                       "steamid": acc["steamid"],
-                       "week_start": week_start_utc.strftime('%Y-%m-%d'),
-                       "drop_farmed": False,
-                       "case_name": "N/A",
-                       "additional_drop": "-"
-                  }
+            acc_info = account_doc_id_map.get(acc_id) # Should always exist
+            entry = progress_map.get(acc_id) # Progress entry for this account, if any
+
+            detailed_entry = {
+                "account_name": acc_info["account_name"],
+                "steamid": acc_info["steamid"],
+                "week_start": week_start_utc.strftime('%Y-%m-%d'), # Use the requested week
+                "drop_farmed": False, # Default
+                "case_name": "N/A",   # Default
+                "additional_drop": "-", # Default
+                "progress_id": None # Default if no progress entry
+            }
+
+            if entry: # If there IS a progress entry
+                detailed_entry.update({
+                    "drop_farmed": entry["drop_farmed"],
+                    "case_name": entry.get("case_name", ""),
+                    "additional_drop": entry.get("additional_drop", ""),
+                    "progress_id": str(entry["_id"]) # <<< ADD THIS: Convert ObjectId to string
+                })
             detailed_progress.append(detailed_entry)
 
-        # --- Return the JSON response ---
         return jsonify(detailed_progress)
 
-    except ValueError: # Catch specific strptime error
-        # week_start_str is guaranteed to exist here if date parameter was provided
-        print(f"Invalid date format received: {week_start_str} for user {current_user.id}")
+    except ValueError:
         return jsonify({"error": "Invalid date format. Use YYYY-MM-DD."}), 400
     except Exception as e:
-        # week_start_str should also exist here if initial check passed
-        # user_id might or might not exist depending on where the Exception happened,
-        # but current_user.id should always work if @login_required passed.
-        print(f"Error fetching week data for date '{week_start_str}' for user {current_user.id}: {e}")
-        # Avoid sending detailed internal errors to the client
-        return jsonify({"error": "An internal error occurred while fetching data."}), 500
+        print(f"Error fetching week data for '{week_start_str}' for user {current_user.id}: {e}")
+        return jsonify({"error": "Failed to fetch data"}), 500
 
+        
 @app.route('/edit_tracked_account/<account_id>', methods=['POST'])
 @login_required
 def edit_tracked_account(account_id):

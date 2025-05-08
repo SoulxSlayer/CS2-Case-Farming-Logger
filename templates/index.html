@@ -119,93 +119,117 @@
                 </div>
             </div>
 
-            {# Last Week Section - No edit button needed here #}
-            <div class="accordion-item bg-dark text-light border-secondary">
-                <h2 class="accordion-header" id="headingLastWeek">
-                    <button class="accordion-button collapsed bg-dark text-light" type="button" data-bs-toggle="collapse" data-bs-target="#collapseLastWeek" aria-expanded="false" aria-controls="collapseLastWeek">
-                        Last Week (Started: {{ last_week_start_str }})
-                    </button>
-                </h2>
-                <div id="collapseLastWeek" class="accordion-collapse collapse" aria-labelledby="headingLastWeek" data-bs-parent="#progressAccordion">
-                    <div class="accordion-body">
-                         <div class="table-responsive">
-                             <table class="table table-dark table-striped table-hover table-sm">
-                                 <thead>
-                                     <tr>
-                                         <th>Account</th>
-                                         <th>Farmed?</th>
-                                         <th>Case Dropped</th>
-                                         <th>Additional Drop</th>
-                                         </tr>
-                                 </thead>
-                                 <tbody>
-                                     {% for entry in last_week_data %}
-                                     <tr>
-                                        {# Check if account exists (wasn't deleted) before linking #}
-                                        <td>
-                                             {% if entry.steamid %}
-                                             <a href="https://steamcommunity.com/profiles/{{ entry.steamid }}/inventory/" target="_blank">{{ entry.account_name }}</a>
-                                             {% else %}
-                                             {{ entry.account_name }} <span class="text-muted">(Account maybe deleted)</span>
-                                             {% endif %}
-                                         </td>
-                                         <td>{{ 'Yes' if entry.drop_farmed else 'No' }}</td>
-                                         <td>{{ entry.case_name if entry.case_name else 'N/A' }}</td>
-                                         <td>{{ entry.additional_drop if entry.additional_drop else '-' }}</td>
-                                     </tr>
-                                     {% else %}
-                                     <tr>
-                                         <td colspan="4" class="text-center">No progress recorded or accounts tracked for last week.</td>
-                                     </tr>
-                                     {% endfor %}
-                                 </tbody>
-                             </table>
-                         </div>
-                    </div>
+            {# Last Week Section - ADD EDIT BUTTONS #}
+        <div class="accordion-item bg-dark text-light border-secondary">
+            <h2 class="accordion-header" id="headingLastWeek">
+                <button class="accordion-button collapsed bg-dark text-light" type="button" data-bs-toggle="collapse" data-bs-target="#collapseLastWeek" aria-expanded="false" aria-controls="collapseLastWeek">
+                    Last Week (Started: {{ last_week_start_str }})
+                </button>
+            </h2>
+            <div id="collapseLastWeek" class="accordion-collapse collapse" aria-labelledby="headingLastWeek" data-bs-parent="#progressAccordion">
+                <div class="accordion-body">
+                     <div class="table-responsive">
+                         <table class="table table-dark table-striped table-hover table-sm">
+                             <thead>
+                                 <tr>
+                                     <th>Account</th>
+                                     <th>Farmed?</th>
+                                     <th>Case Dropped</th>
+                                     <th>Additional Drop</th>
+                                     <th>Actions</th> {# Added Actions Column #}
+                                 </tr>
+                             </thead>
+                             <tbody>
+                                 {% for entry in last_week_data %}
+                                 <tr>
+                                     <td>
+                                         {% if entry.steamid %}
+                                         <a href="https://steamcommunity.com/profiles/{{ entry.steamid }}/inventory/" target="_blank">{{ entry.account_name }}</a>
+                                         {% else %}
+                                         {{ entry.account_name }} <span class="text-muted">(Account maybe deleted)</span>
+                                         {% endif %}
+                                     </td>
+                                     <td>
+                                        {% if entry._id %} {# Check if this is existing progress #}
+                                            {{ 'Yes' if entry.drop_farmed else 'No' }}
+                                        {% else %}
+                                            <span class="text-muted">No</span>
+                                        {% endif %}
+                                     </td>
+                                     <td>{{ entry.case_name if entry.case_name else 'N/A' }}</td>
+                                     <td>{{ entry.additional_drop if entry.additional_drop else '-' }}</td>
+                                     <td>
+                                         {% if entry._id %} {# Only show edit button if progress exists #}
+                                         <button class="btn btn-outline-info btn-sm edit-btn"
+                                                 data-bs-toggle="modal"
+                                                 data-bs-target="#editProgressModal"
+                                                 data-progress-id="{{ entry._id }}"
+                                                 data-account-name="{{ entry.account_name }}"
+                                                 data-week-start="{{ entry.week_start.strftime('%Y-%m-%d') }}"
+                                                 data-drop-farmed="{{ 'true' if entry.drop_farmed else 'false' }}"
+                                                 data-case-name="{{ entry.case_name | default('', true) }}"
+                                                 data-additional-drop="{{ entry.additional_drop | default('', true) }}">
+                                             <i class="bi bi-pencil-square"></i> Edit
+                                         </button>
+                                         {% else %}
+                                              <span class="text-muted fst-italic">-</span> {# Or 'Use form above' #}
+                                         {% endif %}
+                                     </td>
+                                 </tr>
+                                 {% else %}
+                                 <tr>
+                                     <td colspan="5" class="text-center">No progress recorded or accounts tracked for last week.</td> {# colspan changed to 5 #}
+                                 </tr>
+                                 {% endfor %}
+                             </tbody>
+                         </table>
+                     </div>
                 </div>
             </div>
+        </div>
 
-            {# Other Weeks Section - Fetch logic in JS remains similar #}
-            <div class="accordion-item bg-dark text-light border-secondary">
-                 <h2 class="accordion-header" id="headingOtherWeeks">
-                     <button class="accordion-button collapsed bg-dark text-light" type="button" data-bs-toggle="collapse" data-bs-target="#collapseOtherWeeks" aria-expanded="false" aria-controls="collapseOtherWeeks">
-                         Other Weeks
-                     </button>
-                 </h2>
-                 <div id="collapseOtherWeeks" class="accordion-collapse collapse" aria-labelledby="headingOtherWeeks" data-bs-parent="#progressAccordion">
-                     <div class="accordion-body">
-                         <div class="row mb-3">
-                             <div class="col-md-4">
-                                 <label for="other_week_date" class="form-label">Select Week Start (Wednesday):</label>
-                                 <input type="date" class="form-control form-control-sm bg-dark text-light border-secondary" id="other_week_date">
-                             </div>
-                             <div class="col-md-2 d-flex align-items-end">
-                                 <button id="fetch-other-week" class="btn btn-secondary btn-sm">Fetch Data</button>
-                             </div>
+        {# Other Weeks Section - Table will be populated by JS which needs to add edit buttons #}
+        <div class="accordion-item bg-dark text-light border-secondary">
+             <h2 class="accordion-header" id="headingOtherWeeks">
+                 <button class="accordion-button collapsed bg-dark text-light" type="button" data-bs-toggle="collapse" data-bs-target="#collapseOtherWeeks" aria-expanded="false" aria-controls="collapseOtherWeeks">
+                     Other Weeks
+                 </button>
+             </h2>
+             <div id="collapseOtherWeeks" class="accordion-collapse collapse" aria-labelledby="headingOtherWeeks" data-bs-parent="#progressAccordion">
+                 <div class="accordion-body">
+                     <div class="row mb-3">
+                         <div class="col-md-4">
+                             <label for="other_week_date" class="form-label">Select Week Start (Wednesday):</label>
+                             <input type="date" class="form-control form-control-sm bg-dark text-light border-secondary" id="other_week_date">
                          </div>
-                          <div id="other-week-error" class="alert alert-danger d-none" role="alert"></div>
-                         <div class="table-responsive">
-                             <table class="table table-dark table-striped table-hover table-sm">
-                                 <thead>
-                                     <tr>
-                                         <th>Account</th>
-                                         <th>Farmed?</th>
-                                         <th>Case Dropped</th>
-                                         <th>Additional Drop</th>
-                                     </tr>
-                                 </thead>
-                                 <tbody id="other-week-tbody">
-                                     <tr>
-                                         <td colspan="4" class="text-center">Select a week and click 'Fetch Data'.</td>
-                                     </tr>
-                                     </tbody>
-                             </table>
+                         <div class="col-md-2 d-flex align-items-end">
+                             <button id="fetch-other-week" class="btn btn-secondary btn-sm">Fetch Data</button>
                          </div>
+                     </div>
+                      <div id="other-week-error" class="alert alert-danger d-none" role="alert"></div>
+                     <div class="table-responsive">
+                         <table class="table table-dark table-striped table-hover table-sm">
+                             <thead>
+                                 <tr>
+                                     <th>Account</th>
+                                     <th>Farmed?</th>
+                                     <th>Case Dropped</th>
+                                     <th>Additional Drop</th>
+                                     <th>Actions</th> {# Added Actions Column #}
+                                 </tr>
+                             </thead>
+                             <tbody id="other-week-tbody">
+                                 <tr>
+                                     <td colspan="5" class="text-center">Select a week and click 'Fetch Data'.</td> {# colspan changed to 5 #}
+                                 </tr>
+                                 </tbody>
+                         </table>
                      </div>
                  </div>
              </div>
+         </div>
 
-        </div>
+    </div> {# End of accordion #}
 
         {# Edit Modal - Largely the same, ensure case dropdown populates #}
         <div class="modal fade" id="editProgressModal" tabindex="-1" aria-labelledby="editProgressModalLabel" aria-hidden="true">

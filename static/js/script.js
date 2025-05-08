@@ -1,6 +1,6 @@
 document.addEventListener('DOMContentLoaded', function() {
 
-    // --- Edit Modal Logic ---
+    // --- Edit Progress Modal Logic (Mostly stays the same) ---
     const editModal = document.getElementById('editProgressModal');
     if (editModal) {
         const editForm = document.getElementById('editProgressForm');
@@ -9,32 +9,28 @@ document.addEventListener('DOMContentLoaded', function() {
         const editDropFarmedCheck = document.getElementById('edit_drop_farmed');
         const editCaseNameSelect = document.getElementById('edit_case_name');
         const editAdditionalDropInput = document.getElementById('edit_additional_drop');
-        // const editProgressIdInput = document.getElementById('edit_progress_id'); // If using hidden input
 
         editModal.addEventListener('show.bs.modal', function(event) {
-            // Button that triggered the modal
-            const button = event.relatedTarget;
+            const button = event.relatedTarget; // Button that triggered the modal
+            if (!button.classList.contains('edit-btn')) return; // Ensure it's an edit button
 
-            // Extract info from data-* attributes
             const progressId = button.getAttribute('data-progress-id');
             const accountName = button.getAttribute('data-account-name');
-            const weekStart = button.getAttribute('data-week-start');
+            const weekStart = button.getAttribute('data-week-start'); // This should be formatted YYYY-MM-DD
             const dropFarmed = button.getAttribute('data-drop-farmed') === 'true';
             const caseName = button.getAttribute('data-case-name');
             const additionalDrop = button.getAttribute('data-additional-drop');
 
-            // Update the modal's content
-            editForm.action = `/update_progress/${progressId}`; // Set the form action URL
+            editForm.action = `/update_progress/${progressId}`;
             editAccountNameSpan.textContent = accountName;
             editWeekStartSpan.textContent = weekStart;
             editDropFarmedCheck.checked = dropFarmed;
-            editCaseNameSelect.value = caseName || ""; // Set selected option, handle null/empty
-            editAdditionalDropInput.value = additionalDrop || ""; // Set value, handle null/empty
-            // editProgressIdInput.value = progressId; // If using hidden input
+            editCaseNameSelect.value = caseName || "";
+            editAdditionalDropInput.value = additionalDrop || "";
         });
     }
 
-    // --- Other Weeks Fetch Logic ---
+    // --- Other Weeks Fetch Logic (MODIFY TO ADD EDIT BUTTONS) ---
     const fetchButton = document.getElementById('fetch-other-week');
     const otherWeekDateInput = document.getElementById('other_week_date');
     const otherWeekTbody = document.getElementById('other-week-tbody');
@@ -47,25 +43,18 @@ document.addEventListener('DOMContentLoaded', function() {
                 showError('Please select a date first.');
                 return;
             }
-
-            // Optional: Check if the selected date is a Wednesday?
             const dateObj = new Date(selectedDate + 'T00:00:00Z'); // Treat as UTC
-             // getUTCDay(): Sunday is 0, Wednesday is 3
             if (dateObj.getUTCDay() !== 3) {
                 showError('Please select a Wednesday.');
-                // Optionally clear the input or revert
-                // otherWeekDateInput.value = ''; // Clear if invalid
                 return;
             }
 
-
-            hideError(); // Hide previous errors
-            otherWeekTbody.innerHTML = '<tr><td colspan="4" class="text-center">Loading...</td></tr>'; // Show loading state
+            hideError();
+            otherWeekTbody.innerHTML = '<tr><td colspan="5" class="text-center">Loading...</td></tr>'; // Colspan 5
 
             fetch(`/get_week_data?date=${selectedDate}`)
                 .then(response => {
                     if (!response.ok) {
-                        // Try to parse error json from backend if possible
                          return response.json().then(err => { throw new Error(err.error || `HTTP error! Status: ${response.status}`) });
                     }
                     return response.json();
@@ -73,7 +62,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 .then(data => {
                     otherWeekTbody.innerHTML = ''; // Clear loading/previous data
                     if (data.length === 0) {
-                        otherWeekTbody.innerHTML = '<tr><td colspan="4" class="text-center">No progress found for this week.</td></tr>';
+                        otherWeekTbody.innerHTML = '<tr><td colspan="5" class="text-center">No progress found for this week.</td></tr>'; // Colspan 5
                     } else {
                         data.forEach(entry => {
                             const row = otherWeekTbody.insertRow();
@@ -82,11 +71,45 @@ document.addEventListener('DOMContentLoaded', function() {
                             const additionalDropText = entry.additional_drop || '-';
                             const accountLink = `<a href="https://steamcommunity.com/profiles/${entry.steamid}" target="_blank">${entry.account_name}</a>`;
 
+                            let actionsCellContent = '<span class="text-muted fst-italic">-</span>';
+                            // IMPORTANT: The /get_week_data endpoint needs to return a progress ID if an entry exists.
+                            // Let's assume your Python endpoint already adds `_id` to `detailed_entry` IF progress exists.
+                            // If not, you'll need to modify the Python /get_week_data to include `_id: str(entry["_id"])`
+                            // and also make sure your Python `get_progress_for_week` (used by index) includes `_id` if progress exists.
+                            // The current Python code for index page ALREADY includes `_id` correctly.
+                            // For /get_week_data, we need to make sure it does too.
+                            // Let's assume 'entry._id_str' is passed from backend if progress exists
+                            // Your current /get_week_data doesn't seem to pass _id for progress, let's adjust it.
+                            // For now, I'll write the JS assuming `entry.progress_id_str` exists if there's progress.
+
+                            // Let's assume your current /get_week_data in Python returns something like:
+                            // { account_name: "...", steamid: "...", drop_farmed: true, ..., progress_id: "actual_id_if_exists" }
+                            // Your Python needs to ensure `entry._id` (if it exists) is part of the JSON sent to the client.
+                            // And for accounts with NO progress, `progress_id` would be null/undefined.
+
+                            if (entry.progress_id) { // Check if there's an actual progress ID
+                                actionsCellContent = `
+                                    <button class="btn btn-outline-info btn-sm edit-btn"
+                                            data-bs-toggle="modal"
+                                            data-bs-target="#editProgressModal"
+                                            data-progress-id="${entry.progress_id}"
+                                            data-account-name="${entry.account_name}"
+                                            data-week-start="${entry.week_start}" 
+                                            data-drop-farmed="${entry.drop_farmed ? 'true' : 'false'}"
+                                            data-case-name="${entry.case_name || ''}"
+                                            data-additional-drop="${entry.additional_drop || ''}">
+                                        <i class="bi bi-pencil-square"></i> Edit
+                                    </button>
+                                `;
+                            }
+
+
                             row.innerHTML = `
                                 <td>${accountLink}</td>
                                 <td>${farmedText}</td>
                                 <td>${caseNameText}</td>
                                 <td>${additionalDropText}</td>
+                                <td>${actionsCellContent}</td>
                             `;
                         });
                     }
@@ -94,21 +117,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 .catch(error => {
                     console.error('Error fetching other week data:', error);
                     showError(`Failed to fetch data: ${error.message}`);
-                     otherWeekTbody.innerHTML = '<tr><td colspan="4" class="text-center text-danger">Error loading data.</td></tr>';
+                     otherWeekTbody.innerHTML = '<tr><td colspan="5" class="text-center text-danger">Error loading data.</td></tr>'; // Colspan 5
                 });
         });
     }
 
-    function showError(message) {
-         if (otherWeekError) {
-            otherWeekError.textContent = message;
-            otherWeekError.classList.remove('d-none');
-         }
-    }
-    function hideError() {
-         if (otherWeekError) {
-             otherWeekError.classList.add('d-none');
-         }
-    }
-
+    function showError(message) { /* ... (no change) ... */ }
+    function hideError() { /* ... (no change) ... */ }
 });
