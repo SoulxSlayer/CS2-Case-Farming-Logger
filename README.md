@@ -1,6 +1,6 @@
 INVITE CODE: CS2CASELOGGERBYSOULXOXO
 
-# CS2 Case Farming Tracker
+# DropTrack: CS2 Weekly Drop Tracker
 
 A Flask and MongoDB web application designed to help CS2 players track their weekly case drops and additional item farming progress across multiple accounts.
 
