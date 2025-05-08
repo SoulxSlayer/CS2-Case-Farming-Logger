@@ -71,6 +71,7 @@
                                         <th>Farmed?</th>
                                         <th>Case Dropped</th>
                                         <th>Additional Drop</th>
+                                        <th>Price (INR)</th>
                                         <th>Actions</th>
                                     </tr>
                                 </thead>
@@ -88,6 +89,7 @@
                                         </td>
                                         <td>{{ entry.case_name if entry.case_name else 'N/A' }}</td>
                                         <td>{{ entry.additional_drop if entry.additional_drop else '-' }}</td>
+                                        <td>{{ "%.2f"|format(entry.case_value) if entry.case_value else '-' }}</td> 
                                         <td>
                                             {% if entry._id %} {# Only show edit button if progress exists #}
                                             <button class="btn btn-outline-info btn-sm edit-btn"
@@ -113,6 +115,13 @@
                                     </tr>
                                     {% endfor %}
                                 </tbody>
+                                <tfoot> 
+                                    <tr>
+                                        <td colspan="4" class="text-end fw-bold">Total Value:</td>
+                                        <td class="fw-bold">{{ "%.2f"|format(current_week_total_value) }}</td>
+                                        <td></td>
+                                    </tr>
+                                </tfoot>
                             </table>
                         </div>
                     </div>
@@ -136,6 +145,7 @@
                                      <th>Farmed?</th>
                                      <th>Case Dropped</th>
                                      <th>Additional Drop</th>
+                                     <th>Price (INR)</th>
                                      <th>Actions</th> {# Added Actions Column #}
                                  </tr>
                              </thead>
@@ -158,6 +168,7 @@
                                      </td>
                                      <td>{{ entry.case_name if entry.case_name else 'N/A' }}</td>
                                      <td>{{ entry.additional_drop if entry.additional_drop else '-' }}</td>
+                                     <td>{{ "%.2f"|format(entry.case_value) if entry.case_value else '-' }}</td> 
                                      <td>
                                          {% if entry._id %} {# Only show edit button if progress exists #}
                                          <button class="btn btn-outline-info btn-sm edit-btn"
@@ -182,6 +193,13 @@
                                  </tr>
                                  {% endfor %}
                              </tbody>
+                             <tfoot> 
+                                <tr>
+                                    <td colspan="4" class="text-end fw-bold">Total Value:</td>
+                                    <td class="fw-bold">{{ "%.2f"|format(last_week_total_value) }}</td>
+                                    <td></td>
+                                </tr>
+                            </tfoot>
                          </table>
                      </div>
                 </div>
@@ -215,6 +233,7 @@
                                      <th>Farmed?</th>
                                      <th>Case Dropped</th>
                                      <th>Additional Drop</th>
+                                     <th>Price (INR)</th>
                                      <th>Actions</th> {# Added Actions Column #}
                                  </tr>
                              </thead>
@@ -223,6 +242,13 @@
                                      <td colspan="5" class="text-center">Select a week and click 'Fetch Data'.</td> {# colspan changed to 5 #}
                                  </tr>
                                  </tbody>
+                                 <tfoot id="other-week-tfoot" style="display: none;"> 
+                                    <tr>
+                                        <td colspan="4" class="text-end fw-bold">Total Value:</td>
+                                        <td class="fw-bold" id="other-week-total-value">0.00</td>
+                                        <td></td>
+                                    </tr>
+                                </tfoot>
                          </table>
                      </div>
                  </div>

@@ -7,6 +7,7 @@ from bson import ObjectId, BSON
 import json
 from dotenv import load_dotenv
 from werkzeug.security import generate_password_hash, check_password_hash # Added hashing
+from functools import wraps
 
 # Load environment variables
 load_dotenv()
@@ -15,7 +16,9 @@ app = Flask(__name__)
 
 # --- Configuration ---
 app.config['SECRET_KEY'] = os.getenv("FLASK_SECRET_KEY", "default_secret_key_change_me") # Essential for sessions
-MONGO_URI = os.getenv("MONGO_URI", "mongodb+srv://akspar98:CMFGJA1PQBdKmcmM@cluster0.hmaym3d.mongodb.net/")
+MONGO_URI = os.getenv("MONGO_URI")
+if not MONGO_URI:
+    print("CRITICAL ERROR: MONGO_URI environment variable not set.")
 DB_NAME = "cs2_tracker_db"
 VALID_INVITE_CODES = set(os.getenv("VALID_INVITE_CODES", "").split(',')) # Load invite codes
 
@@ -23,11 +26,10 @@ VALID_INVITE_CODES = set(os.getenv("VALID_INVITE_CODES", "").split(',')) # Load 
 try:
     client = MongoClient(MONGO_URI)
     db = client[DB_NAME]
-    accounts_collection = db.accounts # Now stores accounts tracked *by users*
-    cases_collection = db.cases # Remains global
-    progress_collection = db.weekly_progress # Will be linked to users
-    users_collection = db.users # New collection for users
-    # Test connection
+    accounts_collection = db.accounts
+    cases_collection = db.cases # Will now have 'case_price'
+    progress_collection = db.weekly_progress
+    users_collection = db.users # Will now have 'user_type'
     client.admin.command('ping')
     print("Successfully connected to MongoDB!")
 except Exception as e:
@@ -40,18 +42,23 @@ login_manager.init_app(app)
 login_manager.login_view = 'login' # Redirect to login page if @login_required fails
 login_manager.login_message_category = 'info' # Bootstrap class for flash message
 
-# --- User Model ---
+# --- User Model (ADD user_type) ---
 class User(UserMixin):
     def __init__(self, user_data):
-        self.id = str(user_data['_id']) # Must be string for Flask-Login
+        self.id = str(user_data['_id'])
         self.username = user_data['username']
         self.password_hash = user_data['password_hash']
-        self._mongo_id = user_data['_id'] # Keep the ObjectId
+        self.user_type = user_data.get('user_type', 'user') # Default to 'user'
+        self._mongo_id = user_data['_id']
 
+    def is_admin(self):
+        return self.user_type == 'Admin'
+
+    # ... (keep check_password, get_id_obj, get, find_by_username) ...
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
 
-    def get_id_obj(self): # Helper to get the ObjectId
+    def get_id_obj(self):
         return self._mongo_id
 
     @staticmethod
@@ -60,18 +67,30 @@ class User(UserMixin):
             user_data = users_collection.find_one({'_id': ObjectId(user_id)})
             if user_data:
                 return User(user_data)
-        except Exception as e:
-            print(f"Error getting user {user_id}: {e}")
+        except Exception: # Be more specific with exceptions if possible
+            pass
         return None
 
     @staticmethod
     def find_by_username(username):
         return users_collection.find_one({'username': username})
 
+
 @login_manager.user_loader
 def load_user(user_id):
     """Flask-Login callback to load a user from the session."""
     return User.get(user_id)
+
+# --- Admin Required Decorator ---
+def admin_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not current_user.is_authenticated or not current_user.is_admin():
+            flash("You do not have permission to access this page.", "danger")
+            return redirect(url_for('index'))
+        return f(*args, **kwargs)
+    return decorated_function
+
 
 # --- Helper Functions ---
 def get_most_recent_wednesday(today=None):
@@ -121,7 +140,8 @@ def register():
                 'username': username,
                 'password_hash': hashed_password,
                 'registered_at': datetime.now(timezone.utc),
-                'used_invite_code': invite_code # Store which code was used
+                'used_invite_code': invite_code, # Store which code was used
+                'user_type': 'user' # Explicitly set new users to 'user'
             })
             flash('Registration successful! Please login.', 'success')
             return redirect(url_for('login'))
@@ -308,32 +328,67 @@ def delete_tracked_account(account_id):
     return redirect(url_for('manage_accounts'))
 
 
-# --- Core Application Routes (Ensure Sorting) ---
+# --- ADMIN ROUTES ---
+@app.route('/admin/cases', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def admin_manage_cases():
+    if request.method == 'POST':
+        try:
+            for case_id_str, price_str in request.form.items():
+                if not case_id_str.startswith("price_"): # Ensure we are processing price fields
+                    continue
+                actual_case_id_str = case_id_str.replace("price_", "")
 
+                if not price_str: # If price is empty, maybe set to 0 or skip
+                    price = 0.0
+                else:
+                    try:
+                        price = float(price_str)
+                        if price < 0: price = 0.0 # Price cannot be negative
+                    except ValueError:
+                        flash(f"Invalid price format for case ID {actual_case_id_str}.", "warning")
+                        continue # Skip this update
+
+                cases_collection.update_one(
+                    {"_id": ObjectId(actual_case_id_str)},
+                    {"$set": {"case_price": price}}
+                )
+            flash("Case prices updated successfully.", "success")
+        except Exception as e:
+            flash(f"Error updating case prices: {e}", "danger")
+            print(f"Error updating case prices: {e}")
+        return redirect(url_for('admin_manage_cases'))
+
+    all_cases = list(cases_collection.find().sort("case_name", ASCENDING))
+    return render_template('admin_cases.html', cases=all_cases)
+
+
+
+# --- Core Application Routes (MODIFIED for price display) ---
 @app.route('/')
 @login_required
 def index():
-    """Main page displaying current and last week's progress for the logged-in user."""
     try:
         user_id = current_user.get_id_obj()
-
-        # Fetch User-Specific Data - SORTED
-        accounts = list(accounts_collection.find(
+        user_accounts = list(accounts_collection.find(
             {'user_id': user_id}
-        ).sort("sort_number", ASCENDING)) # <<< Ensure sorting
+        ).sort("sort_number", ASCENDING))
 
-        # ... (rest of the index route remains largely the same) ...
+        # Fetch all cases with their prices into a dictionary for quick lookup
+        all_cases_list = list(cases_collection.find({}, {"case_name": 1, "case_price": 1, "release_date": 1}))
+        case_price_map = {case['case_name']: case.get('case_price', 0.0) for case in all_cases_list}
+        
+        # For dropdowns (sorted by release date)
+        cases_for_dropdown = sorted(all_cases_list, key=lambda x: x.get('release_date', datetime.min.replace(tzinfo=timezone.utc)), reverse=True)
 
-        cases = list(cases_collection.find().sort("release_date", DESCENDING))
+
         current_wednesday = get_most_recent_wednesday()
         last_wednesday = get_previous_week_start(current_wednesday)
 
-        def get_progress_for_week(week_start_date, user_accounts):
-            # ... (keep the logic inside get_progress_for_week) ...
-            # The sorting of the final 'detailed_progress' list now depends on the order
-            # of 'user_accounts' passed into it, which are already sorted.
-            account_doc_id_map = {acc['_id']: acc for acc in user_accounts}
-            account_ids_tracked = [acc['_id'] for acc in user_accounts]
+        def get_progress_for_week(week_start_date, user_accounts_list, local_case_price_map):
+            account_doc_id_map = {acc['_id']: acc for acc in user_accounts_list}
+            account_ids_tracked = [acc['_id'] for acc in user_accounts_list]
 
             progress_cursor = progress_collection.find({
                 "user_id": user_id,
@@ -341,11 +396,17 @@ def index():
                 "account_doc_id": {"$in": account_ids_tracked}
             })
             progress_list = list(progress_cursor)
+            detailed_progress_map = {}
+            week_total_price = 0.0
 
-            detailed_progress_map = {} # Use a map for easier lookup
             for entry in progress_list:
                 account_info = account_doc_id_map.get(entry.get('account_doc_id'))
                 if account_info:
+                    case_val = 0.0
+                    if entry.get("drop_farmed") and entry.get("case_name"):
+                        case_val = local_case_price_map.get(entry["case_name"], 0.0)
+                        week_total_price += case_val
+
                     detailed_entry = {
                         "_id": entry["_id"],
                         "account_name": account_info["account_name"],
@@ -354,52 +415,49 @@ def index():
                         "week_start": entry["week_start"],
                         "drop_farmed": entry["drop_farmed"],
                         "case_name": entry.get("case_name", ""),
-                        "additional_drop": entry.get("additional_drop", "")
+                        "additional_drop": entry.get("additional_drop", ""),
+                        "case_value": case_val # Store calculated value
                     }
-                    detailed_progress_map[account_info["_id"]] = detailed_entry # Map by account doc id
-                else:
-                     print(f"Warning: Progress entry {entry['_id']} references missing/untracked account {entry.get('account_doc_id')} for user {user_id}")
+                    detailed_progress_map[account_info["_id"]] = detailed_entry
 
-            # Build the final list IN THE SORTED ORDER of user_accounts
             final_detailed_progress = []
-            for acc in user_accounts: # Iterate through the pre-sorted accounts list
+            for acc in user_accounts_list:
                 if acc['_id'] in detailed_progress_map:
-                     final_detailed_progress.append(detailed_progress_map[acc['_id']])
+                    final_detailed_progress.append(detailed_progress_map[acc['_id']])
                 else:
-                     # Add placeholder for accounts with no progress this week
-                     final_detailed_progress.append({
-                        "_id": None,
-                        "account_name": acc["account_name"],
-                        "steamid": acc["steamid"],
-                        "account_doc_id": acc["_id"],
-                        "week_start": week_start_date,
-                        "drop_farmed": False,
-                        "case_name": "N/A",
-                        "additional_drop": "-"
-                     })
+                    final_detailed_progress.append({
+                        "_id": None, "account_name": acc["account_name"], "steamid": acc["steamid"],
+                        "account_doc_id": acc["_id"], "week_start": week_start_date,
+                        "drop_farmed": False, "case_name": "N/A", "additional_drop": "-",
+                        "case_value": 0.0
+                    })
+            return final_detailed_progress, week_total_price
 
-            return final_detailed_progress # Already sorted according to user_accounts order
+        current_week_data, current_week_total_value = get_progress_for_week(current_wednesday, user_accounts, case_price_map)
+        last_week_data, last_week_total_value = get_progress_for_week(last_wednesday, user_accounts, case_price_map)
 
-        current_week_data = get_progress_for_week(current_wednesday, accounts)
-        last_week_data = get_progress_for_week(last_wednesday, accounts)
+        accounts_for_dropdown = [{"_id": str(acc['_id']), "name": acc['account_name']} for acc in user_accounts]
+        
+        # Use cases_for_dropdown which is already sorted
+        cases_for_dropdown_render = [{"name": case['case_name']} for case in cases_for_dropdown]
 
-        accounts_for_dropdown = [{"_id": str(acc['_id']), "name": acc['account_name']} for acc in accounts] # Already sorted
-        cases_for_dropdown = [{"name": case['case_name']} for case in cases]
 
         return render_template(
             'index.html',
             user_accounts_for_dropdown=accounts_for_dropdown,
-            cases=cases_for_dropdown,
+            cases=cases_for_dropdown_render, # Pass the sorted list for dropdown
             current_week_start_str=current_wednesday.strftime('%Y-%m-%d'),
             current_week_data=current_week_data,
+            current_week_total_value=current_week_total_value,
             last_week_data=last_week_data,
+            last_week_total_value=last_week_total_value,
             last_week_start_str=last_wednesday.strftime('%Y-%m-%d')
         )
     except Exception as e:
         print(f"Error in index route for user {current_user.id}: {e}")
-        flash("An error occurred while loading data.", "danger")
-        return render_template('error.html', error_message=str(e)), 500
-
+        flash(f"An error occurred while loading data: {e}", "danger")
+        return render_template('error.html', error_message=str(e)), 500 # Create error.html if it doesn't exist
+        
 
 @app.route('/add_progress', methods=['POST'])
 @login_required
@@ -538,7 +596,6 @@ def update_progress(progress_id):
 @app.route('/get_week_data', methods=['GET'])
 @login_required
 def get_week_data():
-    """Fetches progress data for a specific week FOR THE CURRENT USER via AJAX."""
     week_start_str = request.args.get('date')
     if not week_start_str:
         return jsonify({"error": "Date parameter is required"}), 400
@@ -553,43 +610,42 @@ def get_week_data():
             {"_id": 1, "account_name": 1, "steamid": 1, "sort_number": 1}
         ).sort("sort_number", ASCENDING))
 
+        case_price_map = {case['case_name']: case.get('case_price', 0.0) for case in cases_collection.find({}, {"case_name": 1, "case_price": 1})}
+
         account_doc_id_map = {acc['_id']: acc for acc in user_accounts}
         account_ids_tracked = list(account_doc_id_map.keys())
 
         progress_cursor = progress_collection.find({
-            "user_id": user_id,
-            "week_start": week_start_utc,
+            "user_id": user_id, "week_start": week_start_utc,
             "account_doc_id": {"$in": account_ids_tracked}
         })
-
         progress_map = {entry['account_doc_id']: entry for entry in progress_cursor}
+        
         detailed_progress = []
+        week_total_price = 0.0
 
         for acc in user_accounts:
             acc_id = acc['_id']
-            acc_info = account_doc_id_map.get(acc_id) # Should always exist
-            entry = progress_map.get(acc_id) # Progress entry for this account, if any
+            acc_info = account_doc_id_map.get(acc_id)
+            entry = progress_map.get(acc_id)
+            
+            case_val = 0.0
+            if entry and entry.get("drop_farmed") and entry.get("case_name"):
+                case_val = case_price_map.get(entry["case_name"], 0.0)
+                week_total_price += case_val
 
             detailed_entry = {
-                "account_name": acc_info["account_name"],
-                "steamid": acc_info["steamid"],
-                "week_start": week_start_utc.strftime('%Y-%m-%d'), # Use the requested week
-                "drop_farmed": False, # Default
-                "case_name": "N/A",   # Default
-                "additional_drop": "-", # Default
-                "progress_id": None # Default if no progress entry
+                "account_name": acc_info["account_name"], "steamid": acc_info["steamid"],
+                "week_start": week_start_utc.strftime('%Y-%m-%d'),
+                "drop_farmed": entry["drop_farmed"] if entry else False,
+                "case_name": entry.get("case_name", "") if entry else "N/A",
+                "additional_drop": entry.get("additional_drop", "") if entry else "-",
+                "progress_id": str(entry["_id"]) if entry else None,
+                "case_value": case_val
             }
-
-            if entry: # If there IS a progress entry
-                detailed_entry.update({
-                    "drop_farmed": entry["drop_farmed"],
-                    "case_name": entry.get("case_name", ""),
-                    "additional_drop": entry.get("additional_drop", ""),
-                    "progress_id": str(entry["_id"]) # <<< ADD THIS: Convert ObjectId to string
-                })
             detailed_progress.append(detailed_entry)
-
-        return jsonify(detailed_progress)
+        
+        return jsonify({"progress": detailed_progress, "total_value": week_total_price})
 
     except ValueError:
         return jsonify({"error": "Invalid date format. Use YYYY-MM-DD."}), 400

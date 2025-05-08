@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Admin - Manage Case Prices{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1 class="mb-4">Manage Case Prices</h1>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <form method="POST" action="{{ url_for('admin_manage_cases') }}">
+        <div class="table-responsive">
+            <table class="table table-dark table-striped table-hover table-sm">
+                <thead>
+                    <tr>
+                        <th>Case Name</th>
+                        <th style="width: 20%;">Price (INR)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for case in cases %}
+                    <tr>
+                        <td>{{ case.case_name }}</td>
+                        <td>
+                            <input type="number" step="0.01" min="0" 
+                                   class="form-control form-control-sm bg-dark text-light border-secondary" 
+                                   name="price_{{ case._id }}" 
+                                   value="{{ '%.2f' % case.get('case_price', 0.0) if case.get('case_price') is not none else '0.00' }}">
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="2" class="text-center">No cases found. Add cases to the 'cases' collection in MongoDB.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% if cases %}
+        <div class="text-end mt-3">
+            <button type="submit" class="btn btn-primary">Save All Prices</button>
+        </div>
+        {% endif %}
+    </form>
+</div>
+{% endblock %}

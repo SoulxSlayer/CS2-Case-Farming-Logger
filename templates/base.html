@@ -26,6 +26,13 @@
                         <li class="nav-item">
                             <a class="nav-link" href="{{ url_for('manage_accounts') }}">Manage Accounts</a>
                         </li>
+                        {# --- ADD ADMIN LINK --- #}
+    {% if current_user.is_admin() %}
+    <li class="nav-item">
+        <a class="nav-link" href="{{ url_for('admin_manage_cases') }}">Admin Cases</a>
+    </li>
+    {% endif %}
+    {# --- END ADMIN LINK --- #}
                         <li class="nav-item dropdown">
                            <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                             Logged in as: {{ current_user.username }}
