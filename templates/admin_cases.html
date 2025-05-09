@@ -3,7 +3,16 @@
 
 {% block content %}
 <div class="container mt-4">
-    <h1 class="mb-4">Manage Case Prices</h1>
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>Manage Case Prices</h1>
+        {# --- FETCH ALL MARKET PRICES BUTTON --- #}
+        <form method="POST" action="{{ url_for('admin_fetch_market_prices') }}" style="display: inline;">
+            <button type="submit" class="btn btn-info" 
+                    onclick="return confirm('This will attempt to fetch current market prices from Steam for all cases with a market link. This process can take a significant amount of time and might be unreliable due to website changes. Continue?');">
+                <i class="bi bi-cloud-download"></i> Fetch Market Prices
+            </button>
+        </form>
+    </div>
 
     {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
@@ -16,13 +25,22 @@
         {% endif %}
     {% endwith %}
 
+    <p class="text-muted small">
+        Manually edit prices below and click "Save All Prices".
+        The "Fetch Market Prices" button will attempt to automatically update prices for cases that have a 'link' field in the database.
+        Automatic fetching is experimental and may not always be accurate or successful.
+    </p>
+
+    {# --- FORM FOR MANUAL PRICE UPDATES --- #}
     <form method="POST" action="{{ url_for('admin_manage_cases') }}">
         <div class="table-responsive">
             <table class="table table-dark table-striped table-hover table-sm">
                 <thead>
                     <tr>
                         <th>Case Name</th>
+                        <th style="width: 30%;">Market Link (for auto-fetch)</th>
                         <th style="width: 20%;">Price (INR)</th>
+                        <th style="width: 20%;">Last Price Check (UTC)</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -30,15 +48,29 @@
                     <tr>
                         <td>{{ case.case_name }}</td>
                         <td>
+                            {% if case.link %}
+                                <a href="{{ case.link }}" target="_blank" title="{{ case.link }}" class="text-truncate d-inline-block" style="max-width: 250px;">{{ case.link }}</a>
+                            {% else %}
+                                <span class="text-muted small">No link provided</span>
+                            {% endif %}
+                        </td>
+                        <td>
                             <input type="number" step="0.01" min="0" 
                                    class="form-control form-control-sm bg-dark text-light border-secondary" 
                                    name="price_{{ case._id }}" 
                                    value="{{ '%.2f' % case.get('case_price', 0.0) if case.get('case_price') is not none else '0.00' }}">
                         </td>
+                        <td>
+                            {% if case.last_price_check %}
+                                {{ case.last_price_check.strftime('%Y-%m-%d %H:%M') }}
+                            {% else %}
+                                <span class="text-muted small">-</span>
+                            {% endif %}
+                        </td>
                     </tr>
                     {% else %}
                     <tr>
-                        <td colspan="2" class="text-center">No cases found. Add cases to the 'cases' collection in MongoDB.</td>
+                        <td colspan="4" class="text-center">No cases found. Add cases to the 'cases' collection in MongoDB. Ensure they have a 'case_name'.</td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -46,7 +78,7 @@
         </div>
         {% if cases %}
         <div class="text-end mt-3">
-            <button type="submit" class="btn btn-primary">Save All Prices</button>
+            <button type="submit" class="btn btn-primary">Save All Prices (Manual Edits)</button>
         </div>
         {% endif %}
     </form>

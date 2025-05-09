@@ -9,6 +9,12 @@ from dotenv import load_dotenv
 from werkzeug.security import generate_password_hash, check_password_hash # Added hashing
 from functools import wraps
 
+import requests
+from bs4 import BeautifulSoup
+from forex_python.converter import CurrencyRates
+import time # For adding delays
+
+
 # Load environment variables
 load_dotenv()
 
@@ -362,6 +368,125 @@ def admin_manage_cases():
 
     all_cases = list(cases_collection.find().sort("case_name", ASCENDING))
     return render_template('admin_cases.html', cases=all_cases)
+
+
+@app.route('/admin/fetch_market_prices', methods=['POST'])
+@login_required
+@admin_required
+def admin_fetch_market_prices():
+    updated_count = 0
+    failed_count = 0
+    skipped_no_link = 0
+    usd_to_inr_rate = 0.0 # Initialize to 0.0
+
+    # --- Fetch USD to INR conversion rate from Frankfurter.app ---
+    try:
+        print("Fetching USD to INR conversion rate from Frankfurter.app...")
+        response_forex = requests.get('https://api.frankfurter.app/latest?from=USD&to=INR', timeout=10) # 10 second timeout
+        response_forex.raise_for_status()  # Raise an exception for HTTP errors (4xx or 5xx)
+        forex_data = response_forex.json()
+        if forex_data and 'rates' in forex_data and 'INR' in forex_data['rates']:
+            usd_to_inr_rate = float(forex_data['rates']['INR'])
+            print(f"Successfully fetched USD to INR rate: {usd_to_inr_rate}")
+            flash(f"Current USD to INR rate: {usd_to_inr_rate:.4f}", "secondary")
+        else:
+            flash("Could not retrieve INR rate from Frankfurter API response. Prices will be in USD.", "warning")
+            print("Frankfurter API response did not contain expected INR rate. Data:", forex_data)
+    except requests.exceptions.RequestException as e_req:
+        flash(f"Failed to fetch currency conversion rate from Frankfurter: {e_req}. Prices will be in USD.", "warning")
+        print(f"Error fetching currency rate from Frankfurter: {e_req}")
+    except (KeyError, ValueError, TypeError) as e_parse_forex: # Catch issues with JSON structure or float conversion
+        flash("Error processing currency conversion data from Frankfurter. Prices will be in USD.", "warning")
+        print(f"Error processing currency conversion JSON from Frankfurter: {e_parse_forex}")
+    # --- End currency fetching ---
+
+    all_cases_to_fetch = list(cases_collection.find()) # Fetch all, filter later if no link
+    total_cases_with_links = 0 # Count cases we will attempt to fetch
+
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+    }
+
+    for case_doc in all_cases_to_fetch:
+        market_link = case_doc.get("link")
+        if not market_link: # Skip if no link
+            skipped_no_link += 1
+            continue
+        total_cases_with_links += 1 # Increment count of cases we are processing
+
+    processed_count = 0
+    for case_doc in all_cases_to_fetch:
+        case_name = case_doc.get("case_name", "Unknown Case")
+        market_link = case_doc.get("link")
+        case_id = case_doc["_id"]
+
+        if not market_link:
+            continue # Already counted in skipped_no_link
+
+        processed_count += 1
+        print(f"Fetching price for {case_name} from {market_link} ({processed_count}/{total_cases_with_links})")
+        
+        try:
+            response_steam = requests.get(market_link, headers=headers, timeout=20) # Increased timeout for Steam
+            response_steam.raise_for_status()
+            soup = BeautifulSoup(response_steam.content, 'html.parser')
+            
+            price_span = None
+            first_result_div = soup.find('div', id='result_0') # Attempt to find based on your Google Sheets XPath
+            if first_result_div:
+                # This selector needs to be very accurate for your specific 'link' structure
+                price_elements = first_result_div.select('div.market_listing_row div.market_listing_price_listings_block span.market_table_value span.normal_price')
+                if not price_elements: # Fallback to another common structure
+                     price_elements = first_result_div.select('div > div:nth-of-type(2) > span:nth-of-type(1) > span:nth-of-type(1)')
+
+                if price_elements:
+                    price_span = price_elements[0] # Take the first one found
+            
+            if price_span:
+                price_text = price_span.get_text(strip=True)
+                price_value_str = price_text.replace('USD', '').replace('$', '').replace('€', '').replace('₹', '').replace(',', '.').strip().split(' ')[0] # More robust cleaning
+                
+                try:
+                    price_usd = float(price_value_str) # Assume the scraped price is USD if not explicitly stated otherwise by Steam
+                    final_price = price_usd
+                    
+                    if usd_to_inr_rate > 0:
+                        price_inr = price_usd * usd_to_inr_rate
+                        final_price = round(price_inr, 2)
+                        print(f"Fetched {case_name}: Original Scraped Price '{price_text}' -> ${price_usd:.2f} USD -> ₹{final_price:.2f} INR")
+                    else:
+                        final_price = round(price_usd, 2) # Store USD price if INR conversion failed
+                        print(f"Fetched {case_name}: Original Scraped Price '{price_text}' -> ${final_price:.2f} USD (INR conversion failed or not performed)")
+
+                    cases_collection.update_one(
+                        {"_id": case_id},
+                        {"$set": {"case_price": final_price, "last_price_check": datetime.now(timezone.utc)}}
+                    )
+                    updated_count += 1
+                except ValueError:
+                    print(f"Could not parse price value '{price_value_str}' from text '{price_text}' for {case_name}")
+                    failed_count += 1
+            else:
+                print(f"Could not find price element for {case_name} on page {market_link}. Check HTML structure and CSS selectors.")
+                failed_count += 1
+
+        except requests.exceptions.RequestException as e_req_steam:
+            print(f"Request failed for {case_name}: {e_req_steam}")
+            failed_count += 1
+        except Exception as e_parse_steam:
+            print(f"Error parsing page or price for {case_name}: {e_parse_steam}")
+            failed_count += 1
+        
+        if processed_count < total_cases_with_links:
+            delay_seconds = 10
+            print(f"Waiting {delay_seconds} seconds...")
+            time.sleep(delay_seconds)
+
+    flash_message = f"Market price fetch complete. Processed: {total_cases_with_links}. Updated: {updated_count}, Failed to parse/find: {failed_count}."
+    if skipped_no_link > 0:
+        flash_message += f" Skipped {skipped_no_link} cases due to missing market links."
+    flash(flash_message, "info")
+    return redirect(url_for('admin_manage_cases'))
 
 
 
