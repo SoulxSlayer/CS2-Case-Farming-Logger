@@ -7,7 +7,8 @@ A Flask and MongoDB web application designed to help CS2 players track their wee
 CS2CASELOGGERBYSOULXOXO
 
 ## Screenshot:
-![{587F642C-9F6D-4392-83D0-4C5FAE5DE029}](https://github.com/user-attachments/assets/08e8d8bb-cadc-4569-a6a8-a4d38a216c46)
+![{BC89A287-1DE4-49FF-965F-6BE2C1565AFA}](https://github.com/user-attachments/assets/00300e41-4f04-4f7f-8f52-973d71b742e9)
+
 
 ## Features
 
